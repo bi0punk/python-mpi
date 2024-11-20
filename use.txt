@@ -1,0 +1,5 @@
+mpirun -np 4 python app.py distributed 100000000      
+python app.py single 100000000    
+
+python primos.py single 100
+mpirun -np 4 python primos.py distributed 100
