@@ -1,0 +1,15 @@
+[project]
+name = "mpi-job-runner"
+version = "1.0.0"
+description = "Distributed job runner with MPI and web dashboard"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "jinja2>=3.1.0",
+    "aiofiles>=23.0",
+    "mpi4py>=3.1.0",
+]
+
+[project.scripts]
+mpi-master = "master.app:main"

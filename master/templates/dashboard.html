@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MPI Job Runner</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+        .subtitle { color: #94a3b8; margin-bottom: 2rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat { background: #1e293b; padding: 1.2rem; border-radius: 0.75rem; }
+        .stat .label { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; }
+        .stat .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.25rem; }
+        .stat .value.green { color: #22c55e; }
+        .stat .value.yellow { color: #eab308; }
+        .stat .value.blue { color: #3b82f6; }
+        .stat .value.red { color: #ef4444; }
+        .chart-wrap { background: #1e293b; padding: 1.5rem; border-radius: 0.75rem; margin-bottom: 2rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 0.75rem 0.5rem; border-bottom: 1px solid #334155; font-size: 0.9rem; }
+        th { color: #94a3b8; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+        .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+        .badge.pending { background: #3b82f6; color: #fff; }
+        .badge.running { background: #eab308; color: #000; }
+        .badge.completed { background: #22c55e; color: #000; }
+        .badge.failed { background: #ef4444; color: #fff; }
+        .mono { font-family: 'Courier New', monospace; font-size: 0.85rem; }
+        .workers { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
+        .worker-chip { background: #1e293b; padding: 0.4rem 0.8rem; border-radius: 999px; font-size: 0.8rem; }
+        .two-col { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+        @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+        pre { font-size: 0.8rem; color: #94a3b8; max-width: 250px; overflow: hidden; text-overflow: ellipsis; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>⚡ MPI Job Runner</h1>
+    <p class="subtitle">Panel de monitoreo de tareas distribuidas</p>
+
+    <div class="grid">
+        <div class="stat">
+            <div class="label">Total tareas</div>
+            <div class="value blue">{{ tasks|length }}</div>
+        </div>
+        <div class="stat">
+            <div class="label">Completadas</div>
+            <div class="value green">{{ tasks|selectattr("status", "equalto", "completed")|list|length }}</div>
+        </div>
+        <div class="stat">
+            <div class="label">En ejecución</div>
+            <div class="value yellow">{{ tasks|selectattr("status", "equalto", "running")|list|length }}</div>
+        </div>
+        <div class="stat">
+            <div class="label">Fallidas</div>
+            <div class="value red">{{ tasks|selectattr("status", "equalto", "failed")|list|length }}</div>
+        </div>
+    </div>
+
+    <div class="workers">
+        {% for w in workers %}
+        <span class="worker-chip">🧠 rank {{ w.rank }} — {{ w.host }}</span>
+        {% endfor %}
+        {% if not workers %}
+        <span class="worker-chip" style="color: #94a3b8;">Sin workers conectados</span>
+        {% endif %}
+    </div>
+
+    <div class="two-col">
+        <div class="chart-wrap">
+            <h3 style="margin-bottom: 1rem;">Speedup por tarea</h3>
+            <canvas id="speedupChart" height="200"></canvas>
+        </div>
+        <div class="chart-wrap">
+            <h3 style="margin-bottom: 1rem;">Tiempo de ejecución (s)</h3>
+            <canvas id="timeChart" height="200"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-wrap">
+        <h3 style="margin-bottom: 1rem;">Tareas</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Algoritmo</th>
+                    <th>Parámetros</th>
+                    <th>Nodos</th>
+                    <th>Estado</th>
+                    <th>Tiempo (s)</th>
+                    <th>Speedup</th>
+                    <th>Creación</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tasks %}
+                <tr>
+                    <td class="mono">#{{ t.id }}</td>
+                    <td>{{ t.algorithm }}</td>
+                    <td><pre>{{ t.params | tojson }}</pre></td>
+                    <td>{{ t.nodes }}</td>
+                    <td><span class="badge {{ t.status }}">{{ t.status }}</span></td>
+                    <td>{{ "%.4f"|format(t.elapsed) if t.elapsed else "—" }}</td>
+                    <td>{{ "%.2fx"|format(t.result.speedup) if t.result and t.result.speedup else "—" }}</td>
+                    <td style="font-size:0.8rem; color:#94a3b8;">{{ t.created_at[:19] }}</td>
+                </tr>
+                {% endfor %}
+                {% if not tasks %}
+                <tr><td colspan="8" style="text-align:center; color:#64748b; padding:2rem;">No hay tareas aún. Crea una con <code style="background:#1e293b; padding:0.1rem 0.4rem; border-radius:4px;">POST /tasks</code></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+const tasks = {{ tasks | tojson }};
+const completed = tasks.filter(t => t.status === 'completed' && t.elapsed);
+const labels = completed.map(t => `#${t.id} ${t.algorithm}`);
+const times = completed.map(t => t.elapsed);
+const speedups = completed.map(t => (t.result && t.result.speedup) || 0);
+const nodes = completed.map(t => t.nodes || 1);
+
+if (speedups.length) {
+    new Chart(document.getElementById('speedupChart'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Speedup',
+                data: speedups,
+                backgroundColor: '#22c55e',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                x: { ticks: { color: '#94a3b8', maxRotation: 45 } }
+            }
+        }
+    });
+}
+
+if (times.length) {
+    new Chart(document.getElementById('timeChart'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Tiempo (s)',
+                data: times,
+                backgroundColor: '#3b82f6',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                x: { ticks: { color: '#94a3b8', maxRotation: 45 } }
+            }
+        }
+    });
+}
+</script>
+</body>
+</html>
