@@ -114,7 +114,8 @@ def main():
                     avg_ops = sum(p["ops_per_sec"] for p in partials) / len(partials)
                     aggregated["avg_ops_per_sec"] = avg_ops
 
-                aggregated["speedup"] = elapsed / (elapsed / size) if size > 1 else 1.0
+                # TODO: replace with a proper sequential baseline measurement
+                aggregated["speedup"] = 1.0
 
                 report_result(task_id, aggregated, elapsed, size)
                 print(f"[coordinator] Task #{task_id} done in {elapsed:.4f}s")
