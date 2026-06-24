@@ -1,7 +1,7 @@
 import json
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
@@ -27,11 +27,9 @@ def dashboard(request: Request):
         if t["result"]:
             t["result"] = json.loads(t["result"])
     workers = get_workers()
-    return HTMLResponse(
-        templates.TemplateResponse(
-            "dashboard.html",
-            {"request": request, "tasks": tasks, "workers": workers},
-        )
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "tasks": tasks, "workers": workers},
     )
 
 
@@ -55,7 +53,7 @@ def list_tasks():
 def task_detail(task_id: int):
     task = get_task(task_id)
     if not task:
-        return {"error": "Task not found"}, 404
+        return JSONResponse(content={"error": "Task not found"}, status_code=404)
     task["params"] = json.loads(task["params"])
     if task["result"]:
         task["result"] = json.loads(task["result"])

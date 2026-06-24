@@ -30,7 +30,7 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS workers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rank INTEGER NOT NULL,
+            rank INTEGER NOT NULL UNIQUE,
             host TEXT NOT NULL,
             last_ping TEXT NOT NULL
         );
@@ -58,10 +58,12 @@ def get_next_pending_task():
         "SELECT * FROM tasks WHERE status = 'pending' ORDER BY id ASC LIMIT 1"
     ).fetchone()
     if row:
-        conn.execute("UPDATE tasks SET status = 'running' WHERE id = ?", (row["id"],))
+        task_id = row["id"]
+        conn.execute("UPDATE tasks SET status = 'running' WHERE id = ?", (task_id,))
         conn.commit()
+        task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         conn.close()
-        return dict(row)
+        return dict(task)
     conn.close()
     return None
 
