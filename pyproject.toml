@@ -9,7 +9,11 @@ dependencies = [
     "jinja2>=3.1.0",
     "aiofiles>=23.0",
     "mpi4py>=3.1.0",
+    "pydantic>=2.0.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "httpx>=0.27.0", "pytest-mock>=3.14.0"]
 
 [project.scripts]
 mpi-master = "master.app:main"
