@@ -1,41 +1,77 @@
-# MPI Job Runner
+# python-mpi — MPI Job Runner
+
+Sistema de cola de tareas distribuidas con MPI y dashboard web. Laboratorio educativo y práctico de cómputo distribuido: permite encolar tareas de cómputo intensivo vía API REST, ejecutarlas en paralelo con MPI y monitorear progreso desde un dashboard web con gráficos de speedup.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python)](https://python.org)
 [![MPI](https://img.shields.io/badge/MPI-mpi4py-00618A)](https://mpi4py.readthedocs.io/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![CI](https://github.com/drbash/python-mpi/actions/workflows/ci.yml/badge.svg)](https://github.com/drbash/python-mpi/actions)
-
-**Sistema de cola de tareas distribuidas con MPI y dashboard web.**
-
-Laboratorio educativo y práctico de cómputo distribuido. Permite encolar tareas de cómputo intensivo via API REST, ejecutarlas en paralelo con MPI, y monitorear progreso desde un dashboard web con gráficos de speedup.
+[![CI](https://github.com/bi0punk/python-mpi/actions/workflows/ci.yml/badge.svg)](https://github.com/bi0punk/python-mpi/actions)
 
 ## Contenido
 
-- [Características](#caracter%C3%ADsticas)
-- [Stack](#stack)
+- [Características](#características)
 - [Arquitectura](#arquitectura)
-- [Estructura](#estructura)
-- [Requisitos](#requisitos)
-- [Instalación](#instalaci%C3%B3n)
+- [Stack](#stack)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Instalación](#instalación)
 - [Uso](#uso)
-- [Algoritmos incluidos](#algoritmos-incluidos)
-- [API](#api)
-- [Tests](#tests)
-- [Configuración](#configuraci%C3%B3n)
-- [CI/CD](#cicd)
-- [Agregar algoritmo](#c%C3%B3mo-agregar-un-nuevo-algoritmo)
-- [Limitaciones / Roadmap](#limitaciones--roadmap)
+- [Configuración](#configuración)
+- [Tests / CI](#tests--ci)
+- [Roadmap](#roadmap)
 - [Licencia](#licencia)
 
 ## Características
 
-- **Cola de tareas distribuidas**: encola tareas via REST, ejecuta con MPI
-- **Dashboard web**: monitoreo en tiempo real con Chart.js (speedup, estado)
-- **Algoritmos paralelizados**: primes, pi_monte_carlo, stress benchmark
-- **Comparación rendimiento**: speedup single vs distribuido
-- **Extensible**: arquitectura plugin para agregar algoritmos fácilmente
-- **Hostfile MPI**: soporte multi-nodo con `machines`
+- **Cola de tareas distribuidas**: encola tareas vía REST, ejecuta con MPI.
+- **Dashboard web**: monitoreo en tiempo real con Chart.js (speedup, estado).
+- **Algoritmos paralelizados**: `primes`, `pi_monte_carlo`, `stress`.
+- **Comparación de rendimiento**: speedup single vs. distribuido.
+- **Extensible**: arquitectura plugin para agregar algoritmos fácilmente.
+- **Hostfile MPI**: soporte multi-nodo con `machines`.
+
+## Arquitectura
+
+```mermaid
+sequenceDiagram
+  participant C as Cliente (curl)
+  participant M as Master (FastAPI :8000)
+  participant D as SQLite
+  participant C0 as Coordinator (rank 0)
+  participant W as Workers (rank 1..N)
+
+  C->>M: POST /tasks {algorithm, params, nodes}
+  M->>D: Crear tarea (pending)
+  M-->>C: {task_id, status}
+
+  loop Sondeo
+    C0->>M: GET /tasks/next/pending
+    M-->>C0: tarea pendiente o null
+  end
+
+  C0->>W: comm.send TAG_WORK (task_id, params)
+  W->>W: algoritmo.run(params, rank, size)
+  W-->>C0: comm.send TAG_RESULT (parciales)
+  C0->>C0: Agregar parciales (primes/pi/stress)
+  C0->>M: POST /tasks/{id}/complete {result, elapsed}
+  M->>D: Marcar completed
+
+  C->>M: GET /tasks/{id}
+  M-->>C: detalle con result y speedup
+```
+
+```mermaid
+flowchart TD
+  MASTER[Master / FastAPI] --> DB[(SQLite)]
+  MASTER --> DASH[dashboard.html<br/>Jinja2 + Chart.js]
+  MASTER -->|HTTP REST| COORD[Coordinator rank 0<br/>mpi4py]
+  COORD -->|TAG_WORK / TAG_RESULT| W1[Worker rank 1]
+  COORD -->|TAG_WORK / TAG_RESULT| W2[Worker rank 2]
+  COORD -->|TAG_WORK / TAG_RESULT| W3[Worker rank N]
+  W1 --> A[algorithms/primes]
+  W1 --> B[algorithms/pi_monte_carlo]
+  W1 --> C[algorithms/stress]
+```
 
 ## Stack
 
@@ -46,35 +82,10 @@ Laboratorio educativo y práctico de cómputo distribuido. Permite encolar tarea
 | Dashboard | Jinja2 + Chart.js |
 | Persistencia | SQLite |
 | Workers | Python 3.10+ + MPI |
+| Modelos | Pydantic |
+| Tests | pytest, httpx, pytest-mock |
 
-## Arquitectura
-
-```
-                    ┌──────────────────────────────────┐
-                    │        Master (FastAPI)           │
-                    │  Puerto 8000 · SQLite · Dashboard │
-                    └────────────┬─────────────────────┘
-                                 │ HTTP (REST API)
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          │                      │                      │
-     ┌────▼────┐           ┌────▼────┐           ┌────▼────┐
-     │Worker   │           │Worker   │           │Worker   │
-     │rank 0   │◄─────────►│rank 1   │◄─────────►│rank 2   │
-     │coordina.│    MPI    │compute  │    MPI    │compute  │
-     └─────────┘           └─────────┘           └─────────┘
-```
-
-### Componentes
-
-| Componente | Rol | Tecnología |
-|---|---|---|
-| **Master** | Servidor web, recibe tareas y expone resultados | FastAPI + SQLite |
-| **Coordinator** (rank 0) | Líder: consulta tareas pendientes, coordina workers, reporta resultados | mpi4py |
-| **Compute** (rank 1..N) | Workers esclavos: ejecutan su chunk y devuelven resultado | mpi4py |
-| **Dashboard** | UI web con estadísticas, speedup y tabla de tareas | Jinja2 + Chart.js |
-
-## Estructura
+## Estructura del repositorio
 
 ```
 python-mpi/
@@ -106,11 +117,18 @@ python-mpi/
 └── README.md
 ```
 
-## Requisitos
+### Componentes
 
-- Python 3.10+
-- OpenMPI o MPICH instalado en el sistema
-- mpi4py
+| Componente | Rol | Tecnología |
+|---|---|---|
+| **Master** | Servidor web, recibe tareas y expone resultados | FastAPI + SQLite |
+| **Coordinator** (rank 0) | Líder: consulta tareas pendientes, coordina workers, reporta resultados | mpi4py |
+| **Compute** (rank 1..N) | Workers esclavos: ejecutan su chunk y devuelven resultado | mpi4py |
+| **Dashboard** | UI web con estadísticas, speedup y tabla de tareas | Jinja2 + Chart.js |
+
+## Instalación
+
+Requisitos: Python 3.10+, OpenMPI o MPICH instalado en el sistema, mpi4py.
 
 ### Verificar MPI
 
@@ -126,10 +144,10 @@ mpirun --version
 python -c "from mpi4py import MPI; print(f'{MPI.COMM_WORLD.Get_size()} processes available')"
 ```
 
-## Instalación
+Instalación del proyecto:
 
 ```bash
-git clone https://github.com/drbash/python-mpi.git
+git clone https://github.com/bi0punk/python-mpi.git
 cd python-mpi
 python -m venv .venv
 source .venv/bin/activate
@@ -174,9 +192,9 @@ curl -X POST http://localhost:8000/tasks \
 
 ### 3. Ver el dashboard
 
-Abrir [http://localhost:8000](http://localhost:8000)
+Abrir [http://localhost:8000](http://localhost:8000).
 
-## Algoritmos incluidos
+### Algoritmos incluidos
 
 | Algoritmo | Descripción | Paralelización |
 |---|---|---|
@@ -184,7 +202,7 @@ Abrir [http://localhost:8000](http://localhost:8000)
 | `pi_monte_carlo` | Aproximación de Pi | Cada worker lanza `N/size` puntos |
 | `stress` | Benchmark CPU (xor/shift) | Cada worker hace `N/size` iteraciones |
 
-## API
+### API
 
 | Método | Ruta | Descripción |
 |---|---|---|
@@ -192,9 +210,13 @@ Abrir [http://localhost:8000](http://localhost:8000)
 | `POST` | `/tasks` | Crear tarea |
 | `GET` | `/tasks` | Listar tareas |
 | `GET` | `/tasks/{id}` | Detalle de tarea |
+| `GET` | `/tasks/next/pending` | Tarea pendiente para workers |
+| `POST` | `/tasks/{id}/complete` | Reportar resultado completado |
+| `POST` | `/tasks/{id}/fail` | Reportar fallo |
 | `GET` | `/workers` | Workers conectados |
+| `POST` | `/workers/ping` | Registro de worker por rank/host |
 
-### Ejemplo respuesta
+### Ejemplo de respuesta
 
 ```json
 // POST /tasks
@@ -211,7 +233,7 @@ Abrir [http://localhost:8000](http://localhost:8000)
     "pi_approx": 3.141592,
     "total_points": 10000000,
     "workers": [...],
-    "speedup": 3.82
+    "speedup": 1.0
   },
   "elapsed": 0.4231,
   "created_at": "2025-05-22T12:00:00+00:00",
@@ -219,31 +241,11 @@ Abrir [http://localhost:8000](http://localhost:8000)
 }
 ```
 
-## Tests
+### Cómo agregar un nuevo algoritmo
 
-```bash
-pip install pytest
-pytest tests/ -v
-```
-
-## Configuración
-
-Variables de entorno (ver `.env.example`):
-
-| Variable | Default | Descripción |
-|---|---|---|
-| `MASTER_HOST` | `0.0.0.0` | Host del servidor master |
-| `MASTER_PORT` | `8000` | Puerto del servidor master |
-
-## CI/CD
-
-GitHub Actions ejecuta lint (Ruff) y tests (pytest) en cada push/PR.
-
-## Cómo agregar un nuevo algoritmo
-
-1. Crear `worker/algorithms/mi_algoritmo.py`
-2. Implementar función `run(params, rank, size) -> dict`
-3. Registrar en `worker/coordinator.py` → diccionario `ALGORITHMS`
+1. Crear `worker/algorithms/mi_algoritmo.py`.
+2. Implementar función `run(params, rank, size) -> dict`.
+3. Registrar en `worker/coordinator.py` en el diccionario `ALGORITHMS`.
 
 ```python
 # worker/algorithms/sum_squares.py
@@ -256,7 +258,25 @@ def run(params, rank, size):
     return {"partial_sum": total, "start": start, "end": end}
 ```
 
-## Limitaciones / Roadmap
+## Configuración
+
+Variables de entorno (ver `.env.example`):
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `MASTER_HOST` | `0.0.0.0` | Host del servidor master |
+| `MASTER_PORT` | `8000` | Puerto del servidor master |
+
+## Tests / CI
+
+```bash
+pip install pytest
+pytest tests/ -v
+```
+
+El workflow `.github/workflows/ci.yml` ejecuta lint (Ruff) y tests (pytest) en cada push/PR.
+
+## Roadmap
 
 - [x] Cola de tareas distribuidas con MPI
 - [x] Dashboard web con speedup
@@ -264,6 +284,7 @@ def run(params, rank, size):
 - [ ] Prioridades en cola de tareas
 - [ ] Cancelación de tareas en ejecución
 - [ ] Re-ejecución automática de tareas fallidas
+- [ ] Baseline secuencial real para calcular speedup
 - [ ] Soporte GPU (CUDA + MPI)
 - [ ] Escalado dinámico de workers
 - [ ] Autenticación en API
