@@ -1,6 +1,6 @@
-from pydantic import BaseModel
 from enum import Enum
-from typing import Optional
+
+from pydantic import BaseModel
 
 
 class TaskStatus(str, Enum):
@@ -35,7 +35,7 @@ class Task(BaseModel):
     params: dict
     nodes: int
     status: TaskStatus
-    result: Optional[dict] = None
-    elapsed: Optional[float] = None
+    result: dict | None = None
+    elapsed: float | None = None
     created_at: str
-    completed_at: Optional[str] = None
+    completed_at: str | None = None

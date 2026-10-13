@@ -1,7 +1,6 @@
 import sys
 from unittest.mock import MagicMock
 
-
 MPI_MOCK = MagicMock()
 MPI_Mock = MagicMock()
 MPI_Mock.COMM_WORLD = MagicMock()

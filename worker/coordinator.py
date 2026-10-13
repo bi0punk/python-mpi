@@ -1,14 +1,13 @@
-import sys
-import time
+import contextlib
 import json
 import socket
-import urllib.request
+import time
 import urllib.error
+import urllib.request
 
 from mpi4py import MPI
 
-from common.serializer import serialize, deserialize
-from worker.algorithms import primes, pi_monte_carlo, stress
+from worker.algorithms import pi_monte_carlo, primes, stress
 
 MASTER_URL = "http://localhost:8000"
 TAG_WORK = 100
@@ -56,10 +55,8 @@ def report_failure(task_id: int, error: str):
         data=payload,
         headers={"Content-Type": "application/json"},
     )
-    try:
+    with contextlib.suppress(Exception):
         urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass
 
 
 def main():
@@ -132,7 +129,7 @@ def main():
                 data = comm.recv(source=0, tag=TAG_WORK, status=status)
                 if status.Get_tag() != TAG_WORK:
                     continue
-                task_id, algorithm, params, start_time = data
+                task_id, algorithm, params, _start_time = data
                 algo_module = ALGORITHMS.get(algorithm)
                 if algo_module:
                     result = algo_module.run(params, rank, size)

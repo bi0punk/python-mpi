@@ -1,5 +1,7 @@
 import json
+
 import pytest
+
 from master import db
 
 

@@ -1,8 +1,7 @@
-import json
 import pytest
 from fastapi.testclient import TestClient
+
 from master.app import app
-from common.models import AlgorithmType
 
 
 @pytest.fixture

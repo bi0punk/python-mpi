@@ -91,8 +91,7 @@ flowchart TD
 python-mpi/
 ├── common/
 │   ├── __init__.py
-│   ├── models.py            # Pydantic models
-│   └── serializer.py        # Serialización pickle
+│   └── models.py            # Pydantic models
 ├── master/
 │   ├── __init__.py
 │   ├── app.py               # FastAPI + rutas

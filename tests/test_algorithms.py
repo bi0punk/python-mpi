@@ -1,4 +1,4 @@
-from worker.algorithms import primes, pi_monte_carlo, stress
+from worker.algorithms import pi_monte_carlo, primes, stress
 
 
 class TestPrimes:

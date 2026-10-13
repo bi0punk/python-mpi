@@ -1,8 +1,7 @@
-import sqlite3
 import json
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 DB_PATH = Path(__file__).parent / "data" / "mpi_jobs.db"
 
@@ -97,7 +96,7 @@ def get_all_tasks():
     return [dict(r) for r in rows]
 
 
-def get_task(task_id: int) -> Optional[dict]:
+def get_task(task_id: int) -> dict | None:
     conn = get_connection()
     row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     conn.close()

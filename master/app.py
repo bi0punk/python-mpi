@@ -1,12 +1,23 @@
 import json
-import uvicorn
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
-from master.db import init_db, create_task, get_next_pending_task, complete_task, fail_task, get_all_tasks, get_task, get_workers, register_worker
-from common.models import TaskCreate, TaskResult, AlgorithmType
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
+
+from common.models import TaskCreate, TaskResult
+from master.db import (
+    complete_task,
+    create_task,
+    fail_task,
+    get_all_tasks,
+    get_next_pending_task,
+    get_task,
+    get_workers,
+    init_db,
+    register_worker,
+)
 
 app = FastAPI(title="MPI Job Runner")
 
@@ -28,8 +39,9 @@ def dashboard(request: Request):
             t["result"] = json.loads(t["result"])
     workers = get_workers()
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
-        {"request": request, "tasks": tasks, "workers": workers},
+        {"tasks": tasks, "workers": workers},
     )
 
 
